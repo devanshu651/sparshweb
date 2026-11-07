@@ -2,6 +2,7 @@
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { ArrowDown, ArrowRight, ArrowUpRight, Brain, ChevronDown, Hand, Heart, Menu, MessageCircle, PersonStanding, X } from 'lucide-react'
 import { MotionConfig, motion, useReducedMotion } from 'framer-motion'
+import { getScrollPosition, subscribeToScroll } from './scroll'
 import heroImage from './assets/sparsh-hero.jpg'
 import './App.css'
 
@@ -31,18 +32,18 @@ function ScrollProgress() {
   const progressRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const updateProgress = () => {
+    const updateProgress = (scrollY: number) => {
       const scrollableHeight = document.documentElement.scrollHeight - window.innerHeight
-      const progress = scrollableHeight > 0 ? Math.min(1, Math.max(0, window.scrollY / scrollableHeight)) : 0
+      const progress = scrollableHeight > 0 ? Math.min(1, Math.max(0, scrollY / scrollableHeight)) : 0
       if (progressRef.current) progressRef.current.style.transform = `scaleX(${progress})`
     }
 
-    updateProgress()
-    window.addEventListener('scroll', updateProgress, { passive: true })
-    window.addEventListener('resize', updateProgress, { passive: true })
+    const unsubscribe = subscribeToScroll(updateProgress)
+    const updateAfterResize = () => updateProgress(getScrollPosition())
+    window.addEventListener('resize', updateAfterResize, { passive: true })
     return () => {
-      window.removeEventListener('scroll', updateProgress)
-      window.removeEventListener('resize', updateProgress)
+      unsubscribe()
+      window.removeEventListener('resize', updateAfterResize)
     }
   }, [])
 
@@ -56,14 +57,55 @@ function Brand({ inverse = false }: { inverse?: boolean }) {
 function Header() {
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const [visible, setVisible] = useState(true)
   const [activeHomeSection, setActiveHomeSection] = useState('')
+  const openRef = useRef(open)
+  const focusWithinRef = useRef(false)
+  const visibleRef = useRef(true)
+  openRef.current = open
+  const updateVisibility = (nextVisible: boolean) => {
+    if (visibleRef.current === nextVisible) return
+    visibleRef.current = nextVisible
+    setVisible(nextVisible)
+  }
   const location = useLocation()
   const close = () => setOpen(false)
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 16)
-    handleScroll()
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
+    let previousY = getScrollPosition()
+    let lastDirection = 0
+    let movement = 0
+
+    const handleScroll = (scrollY: number) => {
+      setScrolled(scrollY > 16)
+
+      if (scrollY <= 100) {
+        lastDirection = 0
+        movement = 0
+        updateVisibility(true)
+        previousY = scrollY
+        return
+      }
+
+      if (openRef.current || focusWithinRef.current) {
+        movement = 0
+        updateVisibility(true)
+        previousY = scrollY
+        return
+      }
+
+      const delta = scrollY - previousY
+      previousY = scrollY
+      if (delta === 0) return
+
+      const direction = delta > 0 ? 1 : -1
+      movement = direction === lastDirection ? movement + Math.abs(delta) : Math.abs(delta)
+      lastDirection = direction
+
+      if (direction > 0 && movement >= 4) updateVisibility(false)
+      if (direction < 0 && movement >= 10) updateVisibility(true)
+    }
+
+    return subscribeToScroll(handleScroll)
   }, [])
   useEffect(() => { close() }, [location.pathname])
   useEffect(() => {
@@ -85,7 +127,7 @@ function Header() {
     sections.forEach(section => observer.observe(section))
     return () => observer.disconnect()
   }, [location.pathname])
-  return <header className={`site-header ${location.pathname === '/' ? 'site-header-home' : ''} ${scrolled ? 'site-header-scrolled' : ''}`}><div className="header-inner"><Brand /><nav id="site-navigation" className={open ? 'main-nav nav-open' : 'main-nav'} aria-label="Main navigation">{navItems.map(item => <NavLink key={item.to} to={item.to} onClick={close} className={({ isActive }) => isActive || (location.pathname === '/' && activeHomeSection === item.to) ? 'active' : ''} aria-current={location.pathname === '/' && activeHomeSection === item.to ? 'location' : undefined}>{item.label}</NavLink>)}<Link className="mobile-contact" to="/contact" onClick={close}>Get in touch <ArrowRight size={15}/></Link></nav><div className="header-actions"><Link to="/contact" className="contact-link">Get in touch <ArrowUpRight size={14}/></Link><a href={appUrl} className="button button-small">Try SPARSH <ArrowUpRight size={14}/></a></div><button className="menu-toggle" aria-label={open ? 'Close navigation' : 'Open navigation'} aria-expanded={open} aria-controls="site-navigation" onClick={() => setOpen(!open)}>{open ? <X/> : <Menu/>}</button></div></header>
+  return <header className={`site-header ${location.pathname === '/' ? 'site-header-home' : ''} ${scrolled ? 'site-header-scrolled' : ''} ${visible || open ? 'site-header-visible' : 'site-header-hidden'}`} onFocusCapture={() => { focusWithinRef.current = true; updateVisibility(true) }} onBlurCapture={event => { if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return; focusWithinRef.current = false }}><div className="header-inner"><Brand /><nav id="site-navigation" className={open ? 'main-nav nav-open' : 'main-nav'} aria-label="Main navigation">{navItems.map(item => <NavLink key={item.to} to={item.to} onClick={close} className={({ isActive }) => isActive || (location.pathname === '/' && activeHomeSection === item.to) ? 'active' : ''} aria-current={location.pathname === '/' && activeHomeSection === item.to ? 'location' : undefined}>{item.label}</NavLink>)}<Link className="mobile-contact" to="/contact" onClick={close}>Get in touch <ArrowRight size={15}/></Link></nav><div className="header-actions"><Link to="/contact" className="contact-link">Get in touch <ArrowUpRight size={14}/></Link><a href={appUrl} className="button button-small">Try SPARSH <ArrowUpRight size={14}/></a></div><button className="menu-toggle" aria-label={open ? 'Close navigation' : 'Open navigation'} aria-expanded={open} aria-controls="site-navigation" onClick={() => { updateVisibility(true); setOpen(!open) }}>{open ? <X/> : <Menu/>}</button></div></header>
 }
 
 function Eyebrow({ children, light = false }: { children: React.ReactNode, light?: boolean }) { return <div className={`eyebrow ${light ? 'eyebrow-light' : ''}`}><span className="eyebrow-line"/>{children}</div> }
