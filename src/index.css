@@ -1,0 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+:root{font-family:'Manrope',Arial,sans-serif;color:#252a29;background:#f5f1e8;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-optical-sizing:auto;font-weight:400;--ivory:#f5f1e8;--green:#244c43;--amber:#d5a77b;--charcoal:#252a29;--sand:#e8e2d6;--serif:'Instrument Serif',Georgia,serif;--mono:'DM Mono',monospace;--body:'Manrope',Arial,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:auto;scroll-padding-top:100px}body{margin:0;min-width:320px}button,input,select,textarea{font:inherit}button,a{-webkit-tap-highlight-color:transparent}a{color:inherit}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #d5a77b;outline-offset:4px}::selection{background:#d5a77b;color:#252a29}#root{min-height:100vh;overflow:hidden}img{max-width:100%}
