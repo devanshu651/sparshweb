@@ -1,12 +1,46 @@
 ﻿import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom'
+import type { KeyboardEvent } from 'react'
 import { ArrowDown, ArrowRight, ArrowUpRight, Brain, BriefcaseBusiness, ChevronDown, Code2, Hand, Heart, Menu, MessageCircle, PersonStanding, X, Globe, Mail } from 'lucide-react'
 import { MotionConfig, motion, useReducedMotion } from 'framer-motion'
 import { getScrollPosition, subscribeToScroll } from './scroll'
 import heroImage from './assets/sparsh-hero.jpg'
+import childrenVisit from './assets/fieldwork/children  ka.jpeg'
+import prototypeVisit from './assets/fieldwork/showcasing our prototype gallery.jpeg'
+import workerVisit from './assets/fieldwork/anganwadi worker.jpeg'
+import communityVisit from './assets/fieldwork/anganwadi2 revsa.jpeg'
+import healthcareCentreVisit from './assets/fieldwork/arogya mandir doc.jpeg'
 import './App.css'
 
 const appUrl = 'https://sparsh-tech.vercel.app'
+const COOKIE_CONSENT_KEY = 'sparsh-cookie-consent'
+const COOKIE_CONSENT_VERSION = 1
+const ANALYTICS_CONFIGURED = false
+const MARKETING_CONFIGURED = false
+
+type CookieConsentRecord = {
+  version: number
+  timestamp: string
+  decision: 'accept_all' | 'reject_optional' | 'custom'
+  essential: true
+  analytics: boolean
+  marketing: boolean
+}
+
+function readCookieConsent(): CookieConsentRecord | null {
+  try {
+    const stored = localStorage.getItem(COOKIE_CONSENT_KEY)
+    if (!stored) return null
+    const parsed: unknown = JSON.parse(stored)
+    if (!parsed || typeof parsed !== 'object') return null
+    const value = parsed as Partial<CookieConsentRecord>
+    if (value.version !== COOKIE_CONSENT_VERSION || value.essential !== true || typeof value.timestamp !== 'string' || !Number.isFinite(Date.parse(value.timestamp)) || !['accept_all', 'reject_optional', 'custom'].includes(value.decision ?? '') || typeof value.analytics !== 'boolean' || typeof value.marketing !== 'boolean') return null
+    return { version: value.version, timestamp: value.timestamp, decision: value.decision as CookieConsentRecord['decision'], essential: true, analytics: ANALYTICS_CONFIGURED && value.analytics, marketing: MARKETING_CONFIGURED && value.marketing }
+  } catch {
+    return null
+  }
+}
+
 const navItems = [
   { label: 'Our story', to: '/our-story' },
   { label: 'The challenge', to: '/the-problem' },
@@ -133,9 +167,61 @@ function Header() {
 function Eyebrow({ children, light = false }: { children: React.ReactNode, light?: boolean }) { return <div className={`eyebrow ${light ? 'eyebrow-light' : ''}`}><span className="eyebrow-line"/>{children}</div> }
 function CTA({ to = appUrl, children, secondary = false }: { to?: string, children: React.ReactNode, secondary?: boolean }) { const inside = to.startsWith('/'); return inside ? <Link className={`text-link ${secondary ? 'text-link-light' : ''}`} to={to}>{children}<ArrowRight size={16}/></Link> : <a className={`text-link ${secondary ? 'text-link-light' : ''}`} href={to} target="_blank" rel="noreferrer">{children}<ArrowUpRight size={16}/></a> }
 
-function Footer() {
+function Footer({ onCookieSettings }: { onCookieSettings: () => void }) {
   const legal = [['Privacy policy','/privacy-policy'],['Terms & conditions','/terms'],['Cookie policy','/cookies'],['Medical disclaimer','/disclaimer'],['Accessibility','/accessibility']]
-  return <footer className="site-footer"><div className="footer-top"><div className="footer-brand"><Brand inverse/><p>Every milestone matters.<br/>Every child deserves to be understood.</p><a href={appUrl} className="button button-light">Try SPARSH <ArrowUpRight size={15}/></a></div><div className="footer-column"><span className="footer-label">Explore</span><Link to="/our-story">Our story</Link><Link to="/the-problem">The challenge</Link><Link to="/our-approach">Our approach</Link><Link to="/research">Research</Link><Link to="/founder">Our Team</Link></div><div className="footer-column"><span className="footer-label">Connect</span><Link to="/contact">Contact</Link><a href={appUrl} target="_blank" rel="noreferrer">SPARSH application <ArrowUpRight size={13}/></a></div><div className="footer-note"><span className="footer-label">A note on screening</span><p>SPARSH supports developmental awareness. It does not diagnose or replace guidance from a qualified health professional.</p></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} SPARSH. Made with care.</span><div>{legal.map(([label,to])=><Link key={to} to={to}>{label}</Link>)}</div><span className="footer-location">India · Early years, understood</span></div></footer>
+  return <footer className="site-footer"><div className="footer-top"><div className="footer-brand"><Brand inverse/><p>Every milestone matters.<br/>Every child deserves to be understood.</p><a href={appUrl} className="button button-light">Try SPARSH <ArrowUpRight size={15}/></a></div><div className="footer-column"><span className="footer-label">Explore</span><Link to="/our-story">Our story</Link><Link to="/the-problem">The challenge</Link><Link to="/our-approach">Our approach</Link><Link to="/research">Research</Link><Link to="/founder">Our Team</Link></div><div className="footer-column"><span className="footer-label">Connect</span><Link to="/contact">Contact</Link><a href={appUrl} target="_blank" rel="noreferrer">SPARSH application <ArrowUpRight size={13}/></a></div><div className="footer-note"><span className="footer-label">A note on screening</span><p>SPARSH supports developmental awareness. It does not diagnose or replace guidance from a qualified health professional.</p></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} SPARSH. Made with care.</span><div>{legal.map(([label,to])=><Link key={to} to={to}>{label}</Link>)}<button className="cookie-settings-trigger" type="button" onClick={onCookieSettings}>Cookie settings</button></div><span className="footer-location">India · Early years, understood</span></div></footer>
+}
+
+function CookieConsent({ consent, settingsOpen, onOpenSettings, onCloseSettings, onSave }: { consent: CookieConsentRecord | null, settingsOpen: boolean, onOpenSettings: () => void, onCloseSettings: () => void, onSave: (analytics: boolean, marketing: boolean, decision: CookieConsentRecord['decision']) => void }) {
+  const reduceMotion = useReducedMotion()
+  const dialogHeadingRef = useRef<HTMLHeadingElement>(null)
+
+  useEffect(() => {
+    if (!settingsOpen) return
+    const background = Array.from(document.querySelectorAll<HTMLElement>('.site-header, main, .site-footer'))
+    const previousInert = background.map((element) => element.inert)
+    background.forEach((element) => { element.inert = true })
+    dialogHeadingRef.current?.focus()
+    return () => background.forEach((element, index) => { element.inert = previousInert[index] })
+  }, [settingsOpen])
+
+  const handleDialogKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onCloseSettings()
+      return
+    }
+    if (event.key !== 'Tab') return
+    const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+    if (!focusable.length) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogHeadingRef.current)) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
+  return <>
+    {!consent && !settingsOpen && <motion.aside className="cookie-banner" aria-label="Cookie consent" initial={reduceMotion ? false : { opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0 : 0.32, ease: 'easeOut' }}>
+      <div className="cookie-banner-copy"><span className="cookie-eyebrow">SPARSH / PRIVACY</span><h2>Your privacy matters to us.</h2><p>This site currently has no analytics or marketing cookies configured. We’ll save your choice in this browser so you won’t see this notice on every visit.</p></div>
+      <div className="cookie-actions"><button className="cookie-accept" type="button" onClick={() => onSave(ANALYTICS_CONFIGURED, MARKETING_CONFIGURED, 'accept_all')}>Accept all</button><button className="cookie-reject" type="button" onClick={() => onSave(false, false, 'reject_optional')}>Reject optional</button><button className="cookie-customize" type="button" onClick={onOpenSettings}>Customize preferences</button></div>
+    </motion.aside>}
+    {settingsOpen && <div className="cookie-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onCloseSettings() }}>
+      <motion.section className="cookie-preferences" role="dialog" aria-modal="true" aria-labelledby="cookie-preferences-title" aria-describedby="cookie-preferences-description" tabIndex={-1} onKeyDown={handleDialogKeyDown} initial={reduceMotion ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0 : 0.25, ease: 'easeOut' }}>
+        <button className="cookie-dialog-close" type="button" aria-label="Close cookie preferences" onClick={onCloseSettings}>×</button>
+        <span className="cookie-eyebrow">SPARSH / YOUR CHOICES</span><h2 id="cookie-preferences-title" ref={dialogHeadingRef} tabIndex={-1}>Privacy preferences</h2><p id="cookie-preferences-description" className="cookie-preferences-intro">Choose how this website may use browser storage. Your choice is saved on this device.</p>
+        <div className="cookie-category"><div><h3>Essential</h3><p>Stores your privacy choice so we can remember it on future visits.</p></div><span className="cookie-required">Always on</span></div>
+        <div className="cookie-category cookie-category-unavailable"><div><h3>Analytics</h3><p>No analytics integration is currently configured on this website.</p></div><span>Not in use</span></div>
+        <div className="cookie-category cookie-category-unavailable"><div><h3>Marketing</h3><p>No marketing or advertising integration is currently configured on this website.</p></div><span>Not in use</span></div>
+        <p className="cookie-no-optional">There are no optional tracking tools to enable at this time.</p>
+        <button className="cookie-save" type="button" onClick={() => onSave(false, false, 'custom')}>Save preferences</button>
+      </motion.section>
+    </div>}
+  </>
 }
 
 const screeningDomains = [
@@ -357,6 +443,7 @@ function TeamPage() {
     <section className="team-members" aria-labelledby="team-members-title"><div className="team-section-heading"><Eyebrow>02 / The people behind the work</Eyebrow><h2 id="team-members-title">Meet the <em>team.</em></h2><p>Behind every part of SPARSH is a team that brought different perspectives, skills and efforts together.</p></div>
       <motion.div className="team-grid" variants={staggerReveal} initial={reduceMotion ? false : 'hidden'} whileInView="visible" viewport={{ once: true, amount: 0.08 }}>{teamProfiles.map((member, index) => <motion.article className="team-card" key={member.name} variants={staggerItem} whileHover={reduceMotion ? undefined : { y: -4 }}><div className={`team-portrait team-portrait-${index % 4}`} aria-hidden="true"><span>{member.initials}</span><small>SPARSH / TEAM</small></div><div className="team-card-content"><h3>{member.name}</h3><p className="team-role">{member.role}</p><p className="team-description">{member.description}</p><div className="team-socials">{(Object.entries(member.links) as [keyof typeof socialIcons, string][]).map(([label, href]) => { const Icon = socialIcons[label]; const email = href.startsWith('mailto:'); return <a key={label} href={href} aria-label={`${member.name} on ${label}`} title={label} {...(!email ? { target: '_blank', rel: 'noopener noreferrer' } : {})}><Icon size={16} aria-hidden="true"/></a> })}</div></div></motion.article>)}</motion.div>
     </section>
+    <FieldworkGallery reduceMotion={reduceMotion}/>
     <section className="team-effort" aria-labelledby="team-effort-title"><div className="team-effort-heading"><Eyebrow light>03 / Our collective effort</Eyebrow><h2 id="team-effort-title">Different contributions, <em>one shared effort.</em></h2><p>Every member took part in collaborative research activities. These connected strands of work helped SPARSH take shape.</p></div><div className="team-effort-grid"><article><span>01</span><h3>Technology & platform</h3><p>Building the digital experience and its screening, referral and guidance workflows.</p></article><article><span>02</span><h3>Research & field visits</h3><p>Listening on the ground and learning how developmental awareness is encountered.</p></article><article><span>03</span><h3>Surveys & documentation</h3><p>Preparing questions, organizing research materials and recording findings.</p></article><article><span>04</span><h3>Community understanding</h3><p>Engaging with caregivers and learning about their needs and perspectives.</p></article><article><span>05</span><h3>Collaboration & coordination</h3><p>Bringing observations, ideas and skills together through shared project work.</p></article></div></section>
     <section className="team-closing"><Eyebrow>A shared mission</Eyebrow><h2>More than a platform built by individuals.</h2><p>SPARSH is the result of a team working toward a common purpose: helping make early childhood developmental awareness and support more accessible.</p><CTA>Explore SPARSH</CTA></section>
   </main>
@@ -367,7 +454,7 @@ function EditorialPage({page}:{page:typeof pages[string]}) { return <main classN
 const legalPages:Record<string,{title:string,intro:string,sections:{heading:string,body:string}[]}>={
  '/privacy-policy':{title:'Privacy policy',intro:'This page explains how the SPARSH public website handles information. The SPARSH application may have separate privacy practices; review its notices before use.',sections:[{heading:'Website browsing',body:'This public website is informational. We do not intentionally request sensitive personal or child development information on these pages. Standard hosting infrastructure may process basic technical information such as requests and device data.'},{heading:'Contact messages',body:'If you contact SPARSH, information you choose to share will be used to respond to your enquiry. Please do not send sensitive health or identifying information about a child through general contact channels.'},{heading:'Application privacy',body:'The SPARSH application is hosted separately. Please review the notices presented within the application before entering information. For privacy questions, contact SPARSH.'},{heading:'Updates and contact',body:'This policy may be updated as the website evolves. Contact us with questions about this notice.'}]},
  '/terms':{title:'Terms & conditions',intro:'By using this website, you agree to use it for general informational purposes and in accordance with these terms.',sections:[{heading:'Website information',body:'Content on this site is provided for general awareness. We aim to keep it clear and accurate, but it may not cover every circumstance and should not be treated as professional advice.'},{heading:'SPARSH application',body:'The application is a separate service and may have additional terms or notices. Use it thoughtfully and follow the instructions presented there.'},{heading:'Acceptable use',body:'Do not misuse this website, disrupt its operation, or use its content in a way that misrepresents SPARSH or the limits of developmental screening.'},{heading:'Changes',body:'These terms may change as the website develops. Continued use after changes are posted indicates acceptance of the updated terms.'}]},
- '/cookies':{title:'Cookie policy',intro:'This policy describes cookie use on the SPARSH public website.',sections:[{heading:'What cookies are',body:'Cookies are small files that a website may store in your browser to support basic functions or remember preferences.'},{heading:'Current use',body:'This website is designed to work without advertising or analytics cookies. Its hosting provider or embedded services, if introduced, may set their own technical cookies.'},{heading:'Your choices',body:'You can manage cookies through your browser settings. Blocking essential cookies may affect some website features.'},{heading:'Questions',body:'If the website adds optional cookies or analytics in future, this notice will be updated to explain them.'}]},
+ '/cookies':{title:'Cookie policy',intro:'This policy describes storage and tracking on the SPARSH public website.',sections:[{heading:'What cookies are',body:'Cookies are small files that a website may store in your browser to support basic functions or remember preferences.'},{heading:'Current use',body:'The public website does not currently load analytics, marketing or advertising scripts, and no website cookies were found in the project. When you save a cookie preference, this site stores that choice in first-party browser local storage with a version and timestamp so it can remember your selection.'},{heading:'Your choices',body:'Use Cookie settings in the footer to reopen your preferences. There are no optional analytics or marketing categories configured on this website at this time.'},{heading:'Third-party requests',body:'The site requests its Instrument Serif, Manrope and DM Mono fonts from Google Fonts. This is a font-loading request, not an analytics integration. Links to the SPARSH application and social profiles open only when you choose them.'}]},
  '/disclaimer':{title:'Medical disclaimer',intro:'SPARSH is an early childhood developmental screening and awareness initiative. It is not a medical service.',sections:[{heading:'Screening is not diagnosis',body:'The SPARSH application provides an age-based, rule-based milestone screening experience. Its output is not a diagnosis, medical advice, or a substitute for an assessment by a qualified health professional.'},{heading:'Development varies',body:'Children develop at different paces. Milestone information is intended to support awareness and conversation, not to compare, label, or predict an individual child.'},{heading:'When you have concerns',body:'If you have concerns about a child’s development, speak with a qualified paediatrician or other appropriate health professional. Seek urgent local care for urgent health concerns.'},{heading:'Use of this website',body:'Information on this public website is general and may not reflect every child’s circumstances. Do not delay professional care based on website or application content.'}]},
  '/accessibility':{title:'Accessibility',intro:'SPARSH aims to make developmental information clear and usable for as many people as possible.',sections:[{heading:'Our intent',body:'We aim for readable typography, clear contrast, keyboard access, responsive layouts, and descriptive labels for interactive elements and imagery.'},{heading:'Ongoing improvement',body:'Accessibility is ongoing work. Some content or features may not yet meet every access need, and the separate SPARSH application may have its own limitations.'},{heading:'Tell us what would help',body:'If you encounter a barrier, contact SPARSH with the page and issue you experienced. Your feedback can help us improve.'}]}}
 
@@ -377,8 +464,62 @@ function Contact() {const [sent,setSent]=useState(false); return <main className
 
 function NotFound(){return <main className="legal-page"><div className="legal-heading"><Eyebrow>SPARSH / 404</Eyebrow><h1>We couldn’t find that page.</h1><p>The page may have moved, or the link may be out of date.</p><CTA to="/">Return home</CTA></div></main>}
 
+const fieldworkPhotos = [
+  { src: prototypeVisit, alt: 'A team member shares a phone with an Anganwadi worker while others look on.', caption: 'From field insights to a working prototype', className: 'fieldwork-photo-prototype' },
+  { src: childrenVisit, alt: 'Children spending time together in a community centre play area.', caption: 'Understanding children’s everyday environments', className: 'fieldwork-photo-children' },
+  { src: workerVisit, alt: 'Team members and children gathered with an Anganwadi worker at a community centre.', caption: 'Learning with Anganwadi workers', className: 'fieldwork-photo-workers' },
+  { src: communityVisit, alt: 'Team members meeting with two community workers around a table.', caption: 'Listening in a community setting', className: 'fieldwork-photo-community' },
+  { src: healthcareCentreVisit, alt: 'The SPARSH team outside a community healthcare centre.', caption: 'Exploring healthcare environments', className: 'fieldwork-photo-healthcare' },
+]
+
+function FieldworkGallery({ reduceMotion }: { reduceMotion: boolean | null }) {
+  return <section className="fieldwork-section" aria-labelledby="fieldwork-title">
+    <div className="fieldwork-heading"><Eyebrow>BEYOND THE SCREEN · OUR FIELDWORK</Eyebrow><h2 id="fieldwork-title">Where the work began.</h2><p>Before building SPARSH, we stepped into communities, interacted with Anganwadi workers and caregivers, and learned about the challenges surrounding early childhood developmental awareness. These experiences helped shape our understanding of the problem and the platform we wanted to build.</p></div>
+    <motion.div className="fieldwork-grid" variants={staggerReveal} initial={reduceMotion ? false : 'hidden'} whileInView="visible" viewport={{ once: true, amount: 0.12 }}>
+      {fieldworkPhotos.map((photo) => <motion.figure className={`fieldwork-photo ${photo.className}`} key={photo.src} variants={staggerItem} whileHover={reduceMotion ? undefined : { y: -4 }}><div className="fieldwork-image-wrap"><img src={photo.src} alt={photo.alt} loading="lazy" decoding="async"/><span aria-hidden="true">SPARSH / FIELD NOTES</span></div><figcaption>{photo.caption}</figcaption></motion.figure>)}
+    </motion.div>
+  </section>
+}
+
 function RouteFocus(){const location=useLocation(); const reduceMotion=useReducedMotion(); useEffect(() => { if (location.pathname !== '/founder') { const title = Object.entries(pages).find(([path]) => path === location.pathname)?.[1]?.eyebrow; document.title = title ? `${title} | SPARSH` : location.pathname === '/' ? 'SPARSH — Every milestone matters' : 'SPARSH' } }, [location.pathname]); return <motion.div key={location.pathname} initial={reduceMotion?false:{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:reduceMotion?0:.35,ease:'easeOut'}}><Routes><Route path="/" element={<Home/>}/><Route path="/founder" element={<TeamPage/>}/>{Object.entries(pages).map(([path,page])=><Route key={path} path={path} element={<EditorialPage page={page}/>}/>)}{Object.entries(legalPages).map(([path,page])=><Route key={path} path={path} element={<LegalPage page={page}/>}/>)}<Route path="/contact" element={<Contact/>}/><Route path="*" element={<NotFound/>}/></Routes></motion.div> }
 
-function App() { return <MotionConfig reducedMotion="user"><ScrollProgress/><Header/><RouteFocus/><Footer/></MotionConfig> }
+function App() {
+  const [consent, setConsent] = useState<CookieConsentRecord | null>(() => readCookieConsent())
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const focusReturnRef = useRef<HTMLElement | null>(null)
+
+  const openCookieSettings = () => {
+    focusReturnRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setSettingsOpen(true)
+  }
+
+  useEffect(() => {
+    if (settingsOpen || !focusReturnRef.current) return
+    const returnTarget = focusReturnRef.current
+    if (returnTarget.isConnected) returnTarget.focus()
+    else document.querySelector<HTMLElement>('.cookie-settings-trigger')?.focus()
+    focusReturnRef.current = null
+  }, [settingsOpen])
+
+  const saveCookieConsent = (analytics: boolean, marketing: boolean, decision: CookieConsentRecord['decision']) => {
+    const next: CookieConsentRecord = {
+      version: COOKIE_CONSENT_VERSION,
+      timestamp: new Date().toISOString(),
+      decision,
+      essential: true,
+      analytics: ANALYTICS_CONFIGURED && analytics,
+      marketing: MARKETING_CONFIGURED && marketing,
+    }
+    try {
+      localStorage.setItem(COOKIE_CONSENT_KEY, JSON.stringify(next))
+    } catch {
+      // Keep the current choice for this visit if browser storage is unavailable.
+    }
+    setConsent(next)
+    setSettingsOpen(false)
+  }
+
+  return <MotionConfig reducedMotion="user"><ScrollProgress/><Header/><RouteFocus/><Footer onCookieSettings={openCookieSettings}/><CookieConsent consent={consent} settingsOpen={settingsOpen} onOpenSettings={openCookieSettings} onCloseSettings={() => setSettingsOpen(false)} onSave={saveCookieConsent}/></MotionConfig>
+}
 
 export default App
